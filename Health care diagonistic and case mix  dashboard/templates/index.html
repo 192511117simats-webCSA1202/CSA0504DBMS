@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AegisCare™ | Healthcare Diagnostic Records & Case Mix (CMI) DBMS</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#ecfeff',
+                            100: '#cffafe',
+                            500: '#06b6d4',
+                            600: '#0891b2',
+                            700: '#0e7490',
+                            900: '#164e63',
+                        },
+                        darkslate: {
+                            800: '#1e293b',
+                            850: '#172033',
+                            900: '#0f172a',
+                            950: '#0a0f1d'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- FontAwesome 6 CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-darkslate-900 border-b border-slate-800 sticky top-0 z-40 backdrop-blur-md bg-opacity-90">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Brand -->
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-teal-400 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                    <i class="fa-solid fa-heart-pulse text-white text-xl"></i>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <span class="font-extrabold text-lg tracking-tight text-white">AegisCare<span class="text-cyan-400">™</span></span>
+                        <span class="text-xs uppercase tracking-wider px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/60 font-semibold">DBMS v3.4</span>
+                    </div>
+                    <p class="text-xs text-slate-400 hidden sm:block">Healthcare Diagnostic Records & Case Mix Index (CMI) System</p>
+                </div>
+            </div>
+
+            <!-- Global Search & System Status -->
+            <div class="flex items-center space-x-3">
+                <div class="relative hidden md:block w-72">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+                    <input type="text" id="globalSearchInput" placeholder="Search Patient, MRN, DRG, or Lab..." 
+                           class="w-full bg-slate-850 border border-slate-700/80 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors">
+                </div>
+
+                <div class="hidden lg:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-slate-850 border border-slate-800 text-xs">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span class="text-slate-300 font-medium">SQLite Engine</span>
+                    <span class="text-slate-500">|</span>
+                    <span class="text-cyan-400 font-mono" id="dbRecordsBadge">10 Tables</span>
+                </div>
+
+                <!-- Quick Action Buttons -->
+                <button onclick="openOrderModal()" class="flex items-center space-x-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow-md transition-colors">
+                    <i class="fa-solid fa-plus text-xs"></i>
+                    <span class="hidden sm:inline">Order Lab</span>
+                </button>
+                <button onclick="openAdmitModal()" class="flex items-center space-x-1.5 bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold px-3 py-2 rounded-lg shadow-md transition-colors">
+                    <i class="fa-solid fa-hospital-user text-xs"></i>
+                    <span class="hidden sm:inline">Admit Patient</span>
+                </button>
+                <a href="/api/export-sql" download class="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-medium px-3 py-2 rounded-lg transition-colors" title="Download Full SQL Script">
+                    <i class="fa-solid fa-download text-xs text-cyan-400"></i>
+                    <span class="hidden md:inline">SQL Dump</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-t border-slate-800/80 flex space-x-1 overflow-x-auto scrollbar-none py-1">
+            <button onclick="switchTab('casemix')" id="tab-casemix" class="nav-tab active-tab">
+                <i class="fa-solid fa-chart-pie mr-2"></i>Case Mix (CMI) Analytics
+            </button>
+            <button onclick="switchTab('diagnostics')" id="tab-diagnostics" class="nav-tab">
+                <i class="fa-solid fa-flask-vial mr-2"></i>Diagnostic Records Hub
+                <span id="criticalBadge" class="ml-1.5 px-1.5 py-0.2 text-[10px] rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/30 hidden">0</span>
+            </button>
+            <button onclick="switchTab('patients')" id="tab-patients" class="nav-tab">
+                <i class="fa-solid fa-users-medical mr-2"></i>Patients & Encounters
+            </button>
+            <button onclick="switchTab('coding')" id="tab-coding" class="nav-tab">
+                <i class="fa-solid fa-dna mr-2"></i>Clinical Coding (DRG / ICD-10)
+            </button>
+            <button onclick="switchTab('workbench')" id="tab-workbench" class="nav-tab">
+                <i class="fa-solid fa-terminal mr-2"></i>DBMS SQL Workbench
+            </button>
+            <button onclick="switchTab('schema')" id="tab-schema" class="nav-tab">
+                <i class="fa-solid fa-database mr-2"></i>Schema & ER Model
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- ================================================================= -->
+        <!-- TAB 1: CASE MIX (CMI) ANALYTICS DASHBOARD                        -->
+        <!-- ================================================================= -->
+        <section id="panel-casemix" class="space-y-6">
+            <!-- Executive KPI Row -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <!-- KPI 1: Hospital CMI -->
+                <div class="bg-darkslate-900 border border-slate-800 rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-cyan-500/40 transition-colors">
+                    <div class="flex items-center justify-between text-slate-400 text-xs font-semibold mb-1 uppercase tracking-wider">
+                        <span>Hospital Case Mix Index</span>
+                        <i class="fa-solid fa-wave-pulse text-cyan-400"></i>
+                    </div>
+                    <div class="flex items-baseline space-x-2">
+                        <span id="statHospitalCmi" class="text-3xl font-extrabold text-white font-mono">0.0000</span>
+                        <span class="text-xs text-emerald-400 font-semibold"><i class="fa-solid fa-arrow-up"></i> High Acuity</span>
+                    </div>
+                    <div class="mt-2 text-[11px] text-slate-400 flex items-center justify-between">
+                        <span>CMS Target: <strong class="text-slate-300">1.2500</strong></span>
+                        <span class="text-cyan-400 font-mono">CMI = ΣRW / Discharges</span>
+                    </div>
+                    <div class="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-500 to-teal-400"></div>
+                </div>
+
+                <!-- KPI 2: Discharges & Census -->
+                <div class="bg-darkslate-900 border border-slate-800 rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-teal-500/40 transition-colors">
+                    <div class="flex items-center justify-between text-slate-400 text-xs font-semibold mb-1 uppercase tracking-wider">
+                        <span>Total Discharges</span>
+                        <i class="fa-solid fa-door-open text-teal-400"></i>
+                    </div>
+                    <div class="flex items-baseline space-x-2">
+                        <span id="statDischarges" class="text-3xl font-extrabold text-white font-mono">0</span>
+                        <span class="text-xs text-slate-400">Cases</span>
+                    </div>
+                    <div class="mt-2 text-[11px] text-slate-400 flex items-center justify-between">
+                        <span>Active Inpatients: <strong id="statActiveInpatients" class="text-teal-400">0</strong></span>
+                        <span>Bed Occ: <strong class="text-slate-300">82%</strong></span>
+                    </div>
+                    <div class="absolute bottom-0 left-0 right-0 h-1 bg-teal-500"></div>
+                </div>
+
+                <!-- KPI 3: ALOS vs Benchmark -->
+                <div class="bg-darkslate-900 border border-slate-800 rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-indigo-500/40 transition-colors">
+                    <div class="flex items-center justify-between text-slate-400 text-xs font-semibold mb-1 uppercase tracking-wider">
+                        <span>Avg Length of Stay (ALOS)</span>
+                        <i class="fa-solid fa-clock-rotate-left text-indigo-400"></i>
+                    </div>
+                    <div class="flex items-baseline space-x-2">
+                        <span id="statAlos" class="text-3xl font-extrabold text-white font-mono">0.0</span>
+                        <span class="text-xs text-slate-400">Days</span>
+                    </div>
+                    <div class="mt-2 text-[11px] text-slate-400 flex items-center justify-between">
+                        <span>CMS Benchmark: <strong class="text-slate-300">5.2 Days</strong></span>
+                        <span class="text-emerald-400"><i class="fa-solid fa-check"></i> Within Target</span>
+                    </div>
+                    <div class="absolute bottom-0 left-0 right-0 h-1 bg-indigo-500"></div>
+                </div>
+
+                <!-- KPI 4: Financial Performance -->
+                <div class="bg-darkslate-900 border border-slate-800 rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-amber-500/40 transition-colors">
+                    <div class="flex items-center justify-between text-slate-400 text-xs font-semibold mb-1 uppercase tracking-wider">
+                        <span>Reimbursement / Revenue</span>
+                        <i class="fa-solid fa-sack-dollar text-amber-400"></i>
+                    </div>
+                    <div class="flex items-baseline space-x-1">
+                        <span id="statReimbursement" class="text-2xl font-extrabold text-white font-mono">$0</span>
+                    </div>
+                    <div class="mt-2 text-[11px] text-slate-400 flex items-center justify-between">
+                        <span>Charges: <span id="statRevenue" class="text-slate-300">$0</span></span>
+                        <span class="text-emerald-400 font-medium">Positive Margin</span>
+                    </div>
+                    <div class="absolute bottom-0 left-0 right-0 h-1 bg-amber-500"></div>
+                </div>
+
+                <!-- KPI 5: Critical Lab Alerts -->
+                <div class="bg-darkslate-900 border border-slate-800 rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-rose-500/40 transition-colors">
+                    <div class="flex items-center justify-between text-slate-400 text-xs font-semibold mb-1 uppercase tracking-wider">
+                        <span>Critical Lab Alerts</span>
+                        <i class="fa-solid fa-triangle-exclamation text-rose-400"></i>
+                    </div>
+                    <div class="flex items-baseline space-x-2">
+                        <span id="statCriticalAlerts" class="text-3xl font-extrabold text-rose-400 font-mono">0</span>
+                        <span class="text-xs text-slate-400">Alerts</span>
+                    </div>
+                    <div class="mt-2 text-[11px] text-slate-400 flex items-center justify-between">
+                        <span>Abnormal: <strong id="statAbnormalAlerts" class="text-amber-400">0</strong></span>
+                        <button onclick="filterDiagnostics('CRITICAL')" class="text-rose-400 hover:underline">Triage <i class="fa-solid fa-arrow-right text-[10px]"></i></button>
+                    </div>
+                    <div class="absolute bottom-0 left-0 right-0 h-1 bg-rose-500"></div>
+                </div>
+            </div>
+
+            <!-- Analytical Charts Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Chart 1: Departmental CMI vs Target Benchmark -->
+                <div class="lg:col-span-2 bg-darkslate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-white flex items-center">
+                                <i class="fa-solid fa-chart-column text-cyan-400 mr-2"></i>
+                                Departmental Case Mix Index (CMI) vs Target Benchmark
+                            </h3>
+                            <p class="text-xs text-slate-400">Evaluates clinical patient acuity and hospital resource consumption per specialty</p>
+                        </div>
+                        <span class="text-xs font-mono text-cyan-400 bg-cyan-950/80 px-2.5 py-1 rounded border border-cyan-800/40">SQL View: vw_departmental_case_mix</span>
+                    </div>
+                    <div class="h-64">
+                        <canvas id="deptCmiChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 2: Clinical Severity Breakdown (CC / MCC) -->
+                <div class="bg-darkslate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h3 class="text-sm font-bold text-white flex items-center">
+                                <i class="fa-solid fa-chart-pie text-teal-400 mr-2"></i>
+                                DRG Severity Classification
+                            </h3>
+                            <p class="text-xs text-slate-400">Comorbidity (CC) & Major Comorbidity (MCC)</p>
+                        </div>
+                    </div>
+                    <div class="h-56 flex items-center justify-center">
+                        <canvas id="severityPieChart"></canvas>
+                    </div>
+                    <div id="severityLegend" class="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-300"></div>
+                </div>
+            </div>
+
+            <!-- Departmental Case Mix Matrix Table -->
+            <div class="bg-darkslate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                <div class="px-5 py-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 bg-slate-900/60">
+                    <div>
+                        <h3 class="text-sm font-bold text-white flex items-center">
+                            <i class="fa-solid fa-table-cells text-cyan-400 mr-2"></i>
+                            Departmental Case Mix Performance & Resource Matrix
+                        </h3>
+                        <p class="text-xs text-slate-400">Real-time aggregation of discharged encounters, cumulative relative weight, and financial margin</p>
+                    </div>
+                    <button onclick="loadCaseMixData()" class="text-xs text-slate-400 hover:text-white flex items-center space-x-1 px-2.5 py-1 rounded bg-slate-800 border border-slate-700">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                        <span>Refresh Matrix</span>
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-950/80 text-slate-400 uppercase font-semibold text-[11px] border-b border-slate-800">
+                            <tr>
+                                <th class="px-4 py-3">Dept Code</th>
+                                <th class="px-4 py-3">Specialty Name</th>
+                                <th class="px-4 py-3 text-center">Discharges</th>
+                                <th class="px-4 py-3 text-center">Target CMI</th>
+                                <th class="px-4 py-3 text-center">Computed CMI</th>
+                                <th class="px-4 py-3 text-center">Acuity Status</th>
+                                <th class="px-4 py-3 text-center">Actual ALOS</th>
+                                <th class="px-4 py-3 text-right">Hospital Charges</th>
+                                <th class="px-4 py-3 text-right">Reimbursement</th>
+                                <th class="px-4 py-3 text-right">Net Margin</th>
+                            </tr>
+                        </thead>
+                        <tbody id="caseMixTableBody" class="divide-y divide-slate-800/60 font-mono text-xs">
+                            <tr>
+                                <td colspan="10" class="text-center py-6 text-slate-500 font-sans">
+                                    <i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading Case Mix database matrix...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 2: DIAGNOSTIC RECORDS HUB                                     -->
+        <!-- ================================================================= -->
+        <section id="panel-diagnostics" class="space-y-6 hidden">
+            <!-- Filter & Toolbar -->
+            <div class="bg-darkslate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex flex-wrap items-center gap-3">
+                    <!-- Flag Filter -->
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs text-slate-400 font-medium">Result Flag:</span>
+                        <select id="diagFlagFilter" onchange="loadDiagnosticRecords()" 
+                                class="bg-slate-800 border border-slate-700 text-xs text-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-cyan-500">
+                            <option value="ALL">All Results (Any Flag)</option>
+                            <option value="CRITICAL">🔴 Critical Alerts Only</option>
+                            <option value="HIGH">🟠 High Values</option>
+                            <option value="LOW">🔵 Low Values</option>
+                            <option value="NORMAL">🟢 Normal Range</option>
+                            <option value="PENDING">⏳ In Progress / Pending</option>
+                        </select>
+                    </div>
+
+                    <!-- Category Filter -->
+                    <div class="flex items-center space-x-2">
+                        <span class="text-xs text-slate-400 font-medium">Category:</span>
+                        <select id="diagCategoryFilter" onchange="loadDiagnosticRecords()" 
+                                class="bg-slate-800 border border-slate-700 text-xs text-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-cyan-500">
+                            <option value="ALL">All Categories</option>
+                            <option value="Biochemistry">Biochemistry</option>
+                            <option value="Hematology">Hematology</option>
+                            <option value="Radiology">Radiology</option>
+                            <option value="Microbiology">Microbiology</option>
+                            <option value="Cardiology Diagnostics">Cardiology Diagnostics</option>
+                            <option value="Immunology">Immunology</option>
+                        </select>
+                    </div>
+
+                    <!-- Local Search -->
+                    <input type="text" id="diagSearchInput" onkeyup="filterDiagnosticsLocal()" placeholder="Filter by patient, test name..." 
+                           class="bg-slate-800 border border-slate-700 text-xs text-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-cyan-500 w-56">
+                </div>
+
+                <div class="flex items-center space-x-2">
+                    <button onclick="openOrderModal()" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex items-center space-x-1">
+                        <i class="fa-solid fa-plus text-xs"></i>
+                        <span>Order New Test</span>
+                    </button>
+                    <button onclick="loadDiagnosticRecords()" class="text-xs text-slate-400 hover:text-white px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-lg">
+                        <i class="fa-solid fa-arrows-rotate"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Diagnostics Data Table -->
+            <div class="bg-darkslate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-950/80 text-slate-400 uppercase font-semibold text-[11px] border-b border-slate-800">
+                            <tr>
+                                <th class="px-4 py-3">Record ID</th>
+                                <th class="px-4 py-3">Patient / MRN</th>
+                                <th class="px-4 py-3">Department</th>
+                                <th class="px-4 py-3">Diagnostic Test</th>
+                                <th class="px-4 py-3 text-center">Quantitative Result</th>
+                                <th class="px-4 py-3 text-center">Normal Reference</th>
+                                <th class="px-4 py-3 text-center">Trigger Flag</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3">Ordered Date</th>
+                                <th class="px-4 py-3 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="diagnosticsTableBody" class="divide-y divide-slate-800/60 text-xs">
+                            <tr>
+                                <td colspan="10" class="text-center py-6 text-slate-500">
+                                    <i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading diagnostic records...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 3: PATIENTS & ENCOUNTERS DIRECTORY                            -->
+        <!-- ================================================================= -->
+        <section id="panel-patients" class="space-y-6 hidden">
+            <!-- Toolbar -->
+            <div class="bg-darkslate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center space-x-3 flex-1 max-w-md">
+                    <input type="text" id="patientSearchInput" onkeyup="filterPatientsLocal()" placeholder="Search patient by name, MRN, insurance..." 
+                           class="w-full bg-slate-800 border border-slate-700 text-xs text-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:border-cyan-500">
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button onclick="openPatientModal()" class="bg-teal-600 hover:bg-teal-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex items-center space-x-1">
+                        <i class="fa-solid fa-user-plus text-xs"></i>
+                        <span>Register Patient</span>
+                    </button>
+                    <button onclick="openAdmitModal()" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex items-center space-x-1">
+                        <i class="fa-solid fa-hospital-user text-xs"></i>
+                        <span>Admit Patient</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Patients Table -->
+            <div class="bg-darkslate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-950/80 text-slate-400 uppercase font-semibold text-[11px] border-b border-slate-800">
+                            <tr>
+                                <th class="px-4 py-3">Patient MRN</th>
+                                <th class="px-4 py-3">Full Name</th>
+                                <th class="px-4 py-3 text-center">Gender / DOB</th>
+                                <th class="px-4 py-3 text-center">Blood Group</th>
+                                <th class="px-4 py-3">Insurance Provider</th>
+                                <th class="px-4 py-3 text-center">Total Encounters</th>
+                                <th class="px-4 py-3 text-center">Current Status</th>
+                                <th class="px-4 py-3 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="patientsTableBody" class="divide-y divide-slate-800/60 text-xs">
+                            <tr>
+                                <td colspan="8" class="text-center py-6 text-slate-500">
+                                    <i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading patients directory...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 4: CLINICAL CODING & DRG / ICD-10 MASTER                      -->
+        <!-- ================================================================= -->
+        <section id="panel-coding" class="space-y-6 hidden">
+            <!-- Header Explaining DRG & CMI -->
+            <div class="bg-darkslate-900 border border-cyan-900/40 rounded-xl p-5 shadow-sm bg-gradient-to-r from-darkslate-900 via-darkslate-850 to-slate-900">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <span class="text-xs uppercase font-bold tracking-wider text-cyan-400">DBMS Knowledge Module</span>
+                        <h3 class="text-base font-bold text-white mt-1">Diagnosis-Related Groups (MS-DRG) & Relative Weight Formulations</h3>
+                        <p class="text-xs text-slate-400 mt-1 max-w-3xl leading-relaxed">
+                            Under the Prospective Payment System (PPS), each DRG is assigned a <strong class="text-cyan-300">Relative Weight (RW)</strong> that reflects the comparative clinical intensity and hospital resources required to treat patients in that category. Higher weights indicate higher illness severity and comorbidity (MCC).
+                        </p>
+                    </div>
+                    <div class="text-right hidden sm:block">
+                        <span class="text-xs text-slate-400">Base Hospital Rate</span>
+                        <p class="text-xl font-bold font-mono text-emerald-400">$6,500.00 / RW</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DRG Table -->
+            <div class="bg-darkslate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+                    <h4 class="text-sm font-bold text-white flex items-center">
+                        <i class="fa-solid fa-book-medical text-cyan-400 mr-2"></i>
+                        CMS MS-DRG Catalog & Benchmark Geometric Mean LOS
+                    </h4>
+                    <span id="drgCountBadge" class="text-xs text-slate-400 font-mono">21 Groups</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-950/80 text-slate-400 uppercase font-semibold text-[11px] border-b border-slate-800">
+                            <tr>
+                                <th class="px-4 py-3">DRG Code</th>
+                                <th class="px-4 py-3">Clinical Title</th>
+                                <th class="px-4 py-3">Major Diagnostic Category (MDC)</th>
+                                <th class="px-4 py-3 text-center">Relative Weight (RW)</th>
+                                <th class="px-4 py-3 text-center">Severity Level</th>
+                                <th class="px-4 py-3 text-center">Benchmark LOS</th>
+                                <th class="px-4 py-3 text-right">Standard Reimbursement</th>
+                            </tr>
+                        </thead>
+                        <tbody id="drgTableBody" class="divide-y divide-slate-800/60 text-xs font-mono">
+                            <tr>
+                                <td colspan="7" class="text-center py-6 text-slate-500 font-sans">
+                                    <i class="fa-solid fa-spinner fa-spin mr-2"></i> Loading DRG master table...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 5: DBMS SQL WORKBENCH (Interactive SQL Console)               -->
+        <!-- ================================================================= -->
+        <section id="panel-workbench" class="space-y-6 hidden">
+            <!-- SQL Console Header & Pre-built queries -->
+            <div class="bg-darkslate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-base font-bold text-white flex items-center">
+                            <i class="fa-solid fa-terminal text-cyan-400 mr-2"></i>
+                            Interactive DBMS SQL Sandbox & Query Execution Engine
+                        </h3>
+                        <p class="text-xs text-slate-400">Directly execute ANSI/SQLite SQL queries against live hospital tables, inspect execution plans, and verify DBMS concepts.</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="executeCurrentQuery()" class="bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs px-4 py-2 rounded-lg shadow-md transition-colors flex items-center space-x-1.5">
+                            <i class="fa-solid fa-play text-xs"></i>
+                            <span>Execute Query (Ctrl+Enter)</span>
+                        </button>
+                        <button onclick="exportQueryResultsCSV()" id="exportCsvBtn" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-2 rounded-lg border border-slate-700 transition-colors disabled:opacity-50" disabled>
+                            <i class="fa-solid fa-file-csv mr-1 text-emerald-400"></i> Export CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Pre-built Curated Academic Queries -->
+                <div class="bg-slate-950/70 rounded-lg p-3 border border-slate-800">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs text-cyan-400 font-semibold uppercase tracking-wider flex items-center">
+                            <i class="fa-solid fa-bolt mr-1.5"></i> One-Click Curated DBMS Queries (For Project Evaluation & Viva)
+                        </span>
+                        <span class="text-[11px] text-slate-500">Select any query to load and inspect</span>
+                    </div>
+                    <div id="sampleQueriesButtons" class="flex flex-wrap gap-2">
+                        <!-- Populated dynamically via JS -->
+                    </div>
+                </div>
+
+                <!-- Code Editor Area -->
+                <div class="space-y-1">
+                    <div class="flex items-center justify-between text-xs text-slate-400 px-1">
+                        <span>SQL Statement:</span>
+                        <span id="queryStatusText" class="font-mono text-cyan-400">Ready</span>
+                    </div>
+                    <textarea id="sqlQueryInput" rows="7" 
+                              class="w-full bg-slate-950 text-cyan-300 font-mono text-xs rounded-lg p-3 border border-slate-800 focus:outline-none focus:border-cyan-500 leading-relaxed shadow-inner"
+                              placeholder="SELECT * FROM vw_departmental_case_mix;"></textarea>
+                </div>
+            </div>
+
+            <!-- Query Execution Results Table -->
+            <div class="bg-darkslate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                <div class="px-5 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/60">
+                    <div class="flex items-center space-x-3">
+                        <h4 class="text-xs font-bold text-white uppercase tracking-wider">Query Output Results</h4>
+                        <span id="queryResultMetrics" class="text-xs text-slate-400 font-mono">No query executed yet</span>
+                    </div>
+                </div>
+                <div id="queryOutputContainer" class="overflow-x-auto max-h-96 overflow-y-auto">
+                    <div class="text-center py-12 text-slate-500 text-xs">
+                        <i class="fa-solid fa-code text-3xl mb-2 text-slate-700 block"></i>
+                        Select a pre-built query above or write your own SQL, then click <strong class="text-cyan-400">Execute Query</strong>.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- TAB 6: SCHEMA & ER MODEL VIEWER                                   -->
+        <!-- ================================================================= -->
+        <section id="panel-schema" class="space-y-6 hidden">
+            <!-- Architecture Summary -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-darkslate-900 border border-slate-800 rounded-xl p-4">
+                    <span class="text-xs text-cyan-400 font-bold uppercase tracking-wider">Normalization Level</span>
+                    <h4 class="text-lg font-bold text-white mt-1">3NF / BCNF Architecture</h4>
+                    <p class="text-xs text-slate-400 mt-1">Zero transitive dependencies. Surrogate primary keys with strict foreign key referential integrity constraints.</p>
+                </div>
+                <div class="bg-darkslate-900 border border-slate-800 rounded-xl p-4">
+                    <span class="text-xs text-teal-400 font-bold uppercase tracking-wider">Active DBMS Triggers</span>
+                    <h4 class="text-lg font-bold text-white mt-1">3 Event-Driven Triggers</h4>
+                    <p class="text-xs text-slate-400 mt-1">Auto-flagging lab values, discharge length of stay auditing, and DRG reimbursement automation.</p>
+                </div>
+                <div class="bg-darkslate-900 border border-slate-800 rounded-xl p-4">
+                    <span class="text-xs text-indigo-400 font-bold uppercase tracking-wider">Relational Structure</span>
+                    <h4 class="text-lg font-bold text-white mt-1">10 Tables & 4 Views</h4>
+                    <p class="text-xs text-slate-400 mt-1">Complete separation of clinical catalogs, transactional admissions, diagnostic orders, and analytics.</p>
+                </div>
+            </div>
+
+            <!-- Interactive Schema Table Explorer -->
+            <div class="bg-darkslate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-sm font-bold text-white flex items-center">
+                            <i class="fa-solid fa-sitemap text-cyan-400 mr-2"></i>
+                            Relational Database Schema & Data Dictionary
+                        </h3>
+                        <p class="text-xs text-slate-400">Select any entity to inspect columns, constraints, primary/foreign keys, and row volumes</p>
+                    </div>
+                    <a href="/api/export-sql" download class="text-xs text-cyan-400 hover:text-cyan-300 flex items-center space-x-1 bg-cyan-950/60 px-3 py-1.5 rounded border border-cyan-800/40">
+                        <i class="fa-solid fa-download"></i>
+                        <span>Download schema.sql & seed_data.sql</span>
+                    </a>
+                </div>
+
+                <div class="flex flex-wrap gap-2" id="schemaTableTabs">
+                    <!-- Populated dynamically via JS -->
+                </div>
+
+                <!-- Table Detail Card -->
+                <div id="schemaTableDetail" class="bg-slate-950 rounded-xl p-4 border border-slate-800">
+                    <p class="text-xs text-slate-500">Loading schema metadata...</p>
+                </div>
+            </div>
+
+            <!-- SQL Triggers & Views Accordion -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Triggers -->
+                <div class="bg-darkslate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+                    <h4 class="text-sm font-bold text-white flex items-center mb-3">
+                        <i class="fa-solid fa-gears text-amber-400 mr-2"></i>
+                        DBMS Triggers (Automated Business Logic)
+                    </h4>
+                    <div id="schemaTriggersContainer" class="space-y-3 text-xs">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Views -->
+                <div class="bg-darkslate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+                    <h4 class="text-sm font-bold text-white flex items-center mb-3">
+                        <i class="fa-solid fa-eye text-teal-400 mr-2"></i>
+                        DBMS Analytical Views
+                    </h4>
+                    <div id="schemaViewsContainer" class="space-y-3 text-xs">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-darkslate-900 border-t border-slate-800 py-4 text-xs text-slate-500 text-center">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <span>Healthcare Diagnostic Records & Case Mix Index (CMI) System • DBMS Project</span>
+            <span class="font-mono text-cyan-400">Database Engine: SQLite3 • Standard ANSI Relational Architecture</span>
+        </div>
+    </footer>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL 1: ORDER NEW DIAGNOSTIC TEST                                    -->
+    <!-- ===================================================================== -->
+    <div id="orderModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-darkslate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="text-sm font-bold text-white flex items-center">
+                    <i class="fa-solid fa-flask-vial text-cyan-400 mr-2"></i>
+                    Order New Diagnostic Lab / Imaging Test
+                </h3>
+                <button onclick="closeOrderModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-base"></i></button>
+            </div>
+            <form id="orderForm" onsubmit="submitDiagnosticOrder(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block text-slate-300 font-medium mb-1">Select Admission / Encounter *</label>
+                    <select id="orderAdmissionSelect" required class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                        <option value="">Loading active admissions...</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-slate-300 font-medium mb-1">Diagnostic Test Catalog *</label>
+                    <select id="orderTestSelect" required onchange="onTestSelectedChange()" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                        <option value="">Loading test catalog...</option>
+                    </select>
+                    <div id="testInfoHelp" class="mt-1 text-[11px] text-cyan-400 font-mono hidden"></div>
+                </div>
+                <div>
+                    <label class="block text-slate-300 font-medium mb-1">Ordering Attending Physician *</label>
+                    <select id="orderPhysicianSelect" required class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                        <option value="">Loading physicians...</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Quantitative Value (Optional)</label>
+                        <input type="number" step="0.01" id="orderNumericResult" placeholder="e.g. 85.5" 
+                               class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                        <span class="text-[10px] text-slate-400">Trigger will auto-evaluate flag if entered!</span>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Text / Qualitative Result</label>
+                        <input type="text" id="orderTextResult" placeholder="e.g. Normal sinus rhythm" 
+                               class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-slate-300 font-medium mb-1">Clinical Indication / Interpretation Notes</label>
+                    <textarea id="orderNotes" rows="2" placeholder="e.g. Chest pain workup; check cardiac enzymes" 
+                              class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500"></textarea>
+                </div>
+                <div class="flex justify-end space-x-2 pt-3 border-t border-slate-800">
+                    <button type="button" onclick="closeOrderModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-medium transition-colors">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-semibold transition-colors">Submit Test Order</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL 2: ADMIT NEW PATIENT                                            -->
+    <!-- ===================================================================== -->
+    <div id="admitModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-darkslate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="text-sm font-bold text-white flex items-center">
+                    <i class="fa-solid fa-hospital-user text-teal-400 mr-2"></i>
+                    Admit Patient to Hospital Encounter
+                </h3>
+                <button onclick="closeAdmitModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-base"></i></button>
+            </div>
+            <form id="admitForm" onsubmit="submitAdmission(event)" class="space-y-3 text-xs">
+                <div>
+                    <label class="block text-slate-300 font-medium mb-1">Select Patient *</label>
+                    <select id="admitPatientSelect" required class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                        <option value="">Loading patients...</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Admitting Department *</label>
+                        <select id="admitDeptSelect" required class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                            <option value="">Loading departments...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Attending Physician *</label>
+                        <select id="admitPhysicianSelect" required class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                            <option value="">Loading physicians...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Admission Type *</label>
+                        <select id="admitTypeSelect" required class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                            <option value="Emergency">Emergency</option>
+                            <option value="Elective">Elective</option>
+                            <option value="Urgent">Urgent</option>
+                            <option value="Trauma">Trauma</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Admission Source *</label>
+                        <input type="text" id="admitSourceInput" value="Emergency Department" 
+                               class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-slate-300 font-medium mb-1">Assigned MS-DRG (Case Mix) *</label>
+                    <select id="admitDrgSelect" required class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                        <option value="">Loading DRGs...</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Principal ICD-10 Code</label>
+                        <input type="text" id="admitIcd10" placeholder="e.g. I50.9" 
+                               class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Initial Estimated Charges ($)</label>
+                        <input type="number" step="0.01" id="admitCharges" value="7500.00" 
+                               class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-2 pt-3 border-t border-slate-800">
+                    <button type="button" onclick="closeAdmitModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-medium transition-colors">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg font-semibold transition-colors">Confirm Admission</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL 3: REGISTER NEW PATIENT                                         -->
+    <!-- ===================================================================== -->
+    <div id="patientModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-darkslate-900 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 class="text-sm font-bold text-white flex items-center">
+                    <i class="fa-solid fa-user-plus text-teal-400 mr-2"></i>
+                    Register New Patient Record
+                </h3>
+                <button onclick="closePatientModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-base"></i></button>
+            </div>
+            <form id="patientForm" onsubmit="submitPatient(event)" class="space-y-3 text-xs">
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">First Name *</label>
+                        <input type="text" id="patFirstName" required placeholder="First name" 
+                               class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Last Name *</label>
+                        <input type="text" id="patLastName" required placeholder="Last name" 
+                               class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                    </div>
+                </div>
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">DOB *</label>
+                        <input type="date" id="patDob" required value="1980-05-15" 
+                               class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Gender *</label>
+                        <select id="patGender" required class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Blood Group</label>
+                        <select id="patBlood" class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                            <option value="O+">O+</option>
+                            <option value="A+">A+</option>
+                            <option value="B+">B+</option>
+                            <option value="AB+">AB+</option>
+                            <option value="O-">O-</option>
+                            <option value="A-">A-</option>
+                            <option value="B-">B-</option>
+                            <option value="AB-">AB-</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Insurance Provider *</label>
+                        <input type="text" id="patInsurance" required value="BlueCross BlueShield" 
+                               class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                    </div>
+                    <div>
+                        <label class="block text-slate-300 font-medium mb-1">Contact Phone</label>
+                        <input type="text" id="patPhone" value="+1-555-0199" 
+                               class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-200 focus:outline-none focus:border-cyan-500">
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-2 pt-3 border-t border-slate-800">
+                    <button type="button" onclick="closePatientModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-medium transition-colors">Cancel</button>
+                    <button type="submit" class="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg font-semibold transition-colors">Register Patient</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- MODAL 4: PATIENT 360-DEGREE CLINICAL DOSSIER                          -->
+    <!-- ===================================================================== -->
+    <div id="dossierModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-darkslate-900 border border-slate-700 rounded-2xl max-w-3xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-full bg-cyan-950 text-cyan-400 flex items-center justify-center font-bold text-sm border border-cyan-800">
+                        <i class="fa-solid fa-id-card-clip"></i>
+                    </div>
+                    <div>
+                        <h3 id="dossierPatientName" class="text-base font-bold text-white">Patient Clinical Dossier</h3>
+                        <p id="dossierPatientMeta" class="text-xs text-slate-400">MRN: - • Age: - • Insurance: -</p>
+                    </div>
+                </div>
+                <button onclick="closeDossierModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            
+            <div id="dossierContent" class="space-y-4 text-xs">
+                <!-- Injected via JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 space-y-2 pointer-events-none"></div>
+
+    <!-- Application JavaScript -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
